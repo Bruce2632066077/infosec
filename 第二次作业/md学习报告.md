@@ -36,4 +36,5 @@ GOOGLE.COM
 
 这是一个链接 [菜鸟教程]<https://www.runoob.com>  
 
-![RUNOOB 图标](http://static.runoob.com/images/runoob-logo.png)
+<div align="left">
+<image src="picture.jpg">
