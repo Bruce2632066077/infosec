@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 
-def self_attention(query, key, value):
+def self_attention(query, key, value,dropout,mask):
     """
     自注意力计算
     :param query: Q
@@ -19,8 +19,19 @@ def self_attention(query, key, value):
     # Q,K相似度计算公式
     scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)  # Q,K相似度计算
 
-    self_attn_softmax = F.softmax(scores, dim=-1)  # 进行softmax
+    # 判断是否要mask，注：mask的操作在QK之后，softmax之前
+    if mask is not None:
+        """
+        scores.masked_fill默认是按照传入的mask中为1的元素所在的索引，
+        在scores中相同的的索引处替换为value，替换值为-1e9，即-(10^9)
+        """
+        # mask.cuda()
+        # 进行mask操作，由于参数mask==0，因此替换上述mask中为0的元素所在的索引
 
+    self_attn_softmax = F.softmax(scores, dim=-1)  # 进行softmax
+    # 判断是否要对相似概率分布进行dropout操作
+    if dropout is not None:
+        self_attn_softmax = dropout(self_attn_softmax)
     # 注意：返回经自注意力计算后的值，以及进行softmax后的相似度（即相似概率分布）
     return torch.matmul(self_attn_softmax, value), self_attn_softmax
 
@@ -30,10 +41,11 @@ class MultiHeadAttention(nn.Module):
     多头注意力计算
     """
 
-    def __init__(self, head, d_model):
+    def __init__(self, head, d_model,dropout=0.1):
         """
         :param head: 头数 默认为 8
         :param d_model: 输入的维度，必须是head的整数倍
+        :param dropout: drop比率
         """
         super(MultiHeadAttention, self).__init__()
         assert (d_model % head == 0)  # 确保输入维度是头数的整数倍
@@ -51,10 +63,12 @@ class MultiHeadAttention(nn.Module):
         self.linear_value = nn.Linear(d_model, d_model)
 
         self.linear_out = nn.Linear(d_model, d_model)
-
+        self.dropout = nn.Dropout(p=dropout)
         self.attn_softmax = None  #softmax(QK^T)
 
-    def forward(self, query, key, value):
+    def forward(self, query, key, value,mask=None):
+        if mask is not None:
+            mask = mask.unsqueeze(1)
 
         n_batch = query.size(0)  # batch_size大小，假设query的维度是：[10, 32, 512]，其中10是batch_size的大小
         """
